@@ -2,14 +2,15 @@ package com.example.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
@@ -18,8 +19,36 @@ public class TaskService {
     private static final Logger logger = LoggerFactory.getLogger(TaskService.class);
     private final AtomicInteger taskCounter = new AtomicInteger(0);
     
-    @Autowired
-    private UserService userService;
+    // 任务状态跟踪
+    private final ConcurrentHashMap<String, TaskInfo> taskStatus = new ConcurrentHashMap<>();
+    
+    // 任务信息类
+    public static class TaskInfo {
+        private final String taskId;
+        private final String taskName;
+        private final LocalDateTime startTime;
+        private String status; // RUNNING, COMPLETED, FAILED
+        private String result;
+        private LocalDateTime endTime;
+        
+        public TaskInfo(String taskId, String taskName) {
+            this.taskId = taskId;
+            this.taskName = taskName;
+            this.startTime = LocalDateTime.now();
+            this.status = "RUNNING";
+        }
+        
+        // Getters and setters
+        public String getTaskId() { return taskId; }
+        public String getTaskName() { return taskName; }
+        public LocalDateTime getStartTime() { return startTime; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
+        public String getResult() { return result; }
+        public void setResult(String result) { this.result = result; }
+        public LocalDateTime getEndTime() { return endTime; }
+        public void setEndTime(LocalDateTime endTime) { this.endTime = endTime; }
+    }
     
     // ==================== 定时任务示例 ====================
     
@@ -78,23 +107,55 @@ public class TaskService {
      * 异步任务 - 不阻塞主线程
      */
     @Async("taskExecutor")
-    public CompletableFuture<String> asyncTask(String taskName) {
-        logger.info("异步任务开始执行: {}", taskName);
+    public CompletableFuture<String> asyncTask(String taskName, String taskId) {
+        logger.info("异步任务开始执行: {} (ID: {})", taskName, taskId);
+        
+        TaskInfo taskInfo = taskStatus.get(taskId);
+        if (taskInfo != null) {
+            taskInfo.setStatus("RUNNING");
+        }
         
         try {
             // 模拟长时间运行的任务
             Thread.sleep(3000);
             
-            String result = String.format("任务 %s 执行完成，线程: %s", 
-                taskName, Thread.currentThread().getName());
+            String result = String.format("任务 %s 执行完成，线程: %s, 任务ID: %s", 
+                taskName, Thread.currentThread().getName(), taskId);
             
             logger.info("异步任务完成: {}", result);
+            
+            // 更新任务状态
+            if (taskInfo != null) {
+                taskInfo.setStatus("COMPLETED");
+                taskInfo.setResult(result);
+                taskInfo.setEndTime(LocalDateTime.now());
+            }
+            
             return CompletableFuture.completedFuture(result);
             
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            logger.error("异步任务被中断: {}", taskName);
+            logger.error("异步任务被中断: {} (ID: {})", taskName, taskId);
+            
+            // 更新任务状态为失败
+            if (taskInfo != null) {
+                taskInfo.setStatus("FAILED");
+                taskInfo.setResult("任务被中断");
+                taskInfo.setEndTime(LocalDateTime.now());
+            }
+            
             return CompletableFuture.completedFuture("任务被中断");
+        } catch (Exception e) {
+            logger.error("异步任务执行异常: {} (ID: {})", taskName, taskId, e);
+            
+            // 更新任务状态为失败
+            if (taskInfo != null) {
+                taskInfo.setStatus("FAILED");
+                taskInfo.setResult("任务执行异常: " + e.getMessage());
+                taskInfo.setEndTime(LocalDateTime.now());
+            }
+            
+            return CompletableFuture.completedFuture("任务执行异常");
         }
     }
     
@@ -102,21 +163,49 @@ public class TaskService {
      * 批量异步任务处理
      */
     @Async("taskExecutor")
-    public CompletableFuture<Void> batchAsyncTask(int batchSize) {
-        logger.info("批量异步任务开始，批次大小: {}", batchSize);
+    public CompletableFuture<Void> batchAsyncTask(int batchSize, String taskId) {
+        logger.info("批量异步任务开始，批次大小: {} (ID: {})", batchSize, taskId);
         
-        for (int i = 0; i < batchSize; i++) {
-            try {
+        TaskInfo taskInfo = taskStatus.get(taskId);
+        if (taskInfo != null) {
+            taskInfo.setStatus("RUNNING");
+        }
+        
+        try {
+            for (int i = 0; i < batchSize; i++) {
                 // 模拟处理每个任务项
                 Thread.sleep(500);
-                logger.info("处理批次项 {}/{}", i + 1, batchSize);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
+                logger.info("处理批次项 {}/{} (任务ID: {})", i + 1, batchSize, taskId);
+            }
+            
+            logger.info("批量异步任务完成 (ID: {})", taskId);
+            
+            // 更新任务状态
+            if (taskInfo != null) {
+                taskInfo.setStatus("COMPLETED");
+                taskInfo.setResult(String.format("批量任务完成，处理了 %d 个项目", batchSize));
+                taskInfo.setEndTime(LocalDateTime.now());
+            }
+            
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.error("批量异步任务被中断 (ID: {})", taskId);
+            
+            if (taskInfo != null) {
+                taskInfo.setStatus("FAILED");
+                taskInfo.setResult("批量任务被中断");
+                taskInfo.setEndTime(LocalDateTime.now());
+            }
+        } catch (Exception e) {
+            logger.error("批量异步任务执行异常 (ID: {})", taskId, e);
+            
+            if (taskInfo != null) {
+                taskInfo.setStatus("FAILED");
+                taskInfo.setResult("批量任务执行异常: " + e.getMessage());
+                taskInfo.setEndTime(LocalDateTime.now());
             }
         }
         
-        logger.info("批量异步任务完成");
         return CompletableFuture.completedFuture(null);
     }
     
@@ -195,18 +284,81 @@ public class TaskService {
     // ==================== 手动触发的任务方法 ====================
     
     /**
-     * 手动触发的异步任务
+     * 手动触发的异步任务 - 返回任务ID
      */
-    public CompletableFuture<String> triggerManualTask(String taskData) {
-        return asyncTask("手动触发任务: " + taskData);
+    public String triggerManualTask(String taskData) {
+        // 生成唯一任务ID
+        String taskId = generateTaskId();
+        String taskName = "手动触发任务: " + taskData;
+        
+        // 创建任务信息并存储
+        TaskInfo taskInfo = new TaskInfo(taskId, taskName);
+        taskStatus.put(taskId, taskInfo);
+        
+        // 异步执行任务
+        asyncTask(taskName, taskId);
+        
+        logger.info("手动任务已启动 - 任务ID: {}, 任务名称: {}", taskId, taskName);
+        return taskId;
+    }
+    
+    /**
+     * 手动触发批量异步任务 - 返回任务ID
+     */
+    public String triggerBatchTask(int batchSize) {
+        // 生成唯一任务ID
+        String taskId = generateTaskId();
+        String taskName = "批量异步任务 (大小: " + batchSize + ")";
+        
+        // 创建任务信息并存储
+        TaskInfo taskInfo = new TaskInfo(taskId, taskName);
+        taskStatus.put(taskId, taskInfo);
+        
+        // 异步执行批量任务
+        batchAsyncTask(batchSize, taskId);
+        
+        logger.info("批量任务已启动 - 任务ID: {}, 批次大小: {}", taskId, batchSize);
+        return taskId;
+    }
+    
+    /**
+     * 根据任务ID获取任务状态
+     */
+    public TaskInfo getTaskStatus(String taskId) {
+        return taskStatus.get(taskId);
+    }
+    
+    /**
+     * 获取所有任务状态
+     */
+    public ConcurrentHashMap<String, TaskInfo> getAllTaskStatus() {
+        return new ConcurrentHashMap<>(taskStatus);
+    }
+    
+    /**
+     * 生成唯一任务ID
+     */
+    private String generateTaskId() {
+        return "TASK-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase() + 
+               "-" + System.currentTimeMillis();
     }
     
     /**
      * 获取任务统计信息
      */
     public String getTaskStatistics() {
-        return String.format("任务统计 - 总执行次数: %d, 当前时间: %s", 
-            taskCounter.get(),
+        long runningTasks = taskStatus.values().stream()
+            .filter(task -> "RUNNING".equals(task.getStatus()))
+            .count();
+        long completedTasks = taskStatus.values().stream()
+            .filter(task -> "COMPLETED".equals(task.getStatus()))
+            .count();
+        long failedTasks = taskStatus.values().stream()
+            .filter(task -> "FAILED".equals(task.getStatus()))
+            .count();
+            
+        return String.format("任务统计 - 总任务数: %d, 运行中: %d, 已完成: %d, 失败: %d, 定时任务执行次数: %d, 当前时间: %s", 
+            taskStatus.size(), runningTasks, completedTasks, failedTasks, taskCounter.get(),
             LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
     }
 } 

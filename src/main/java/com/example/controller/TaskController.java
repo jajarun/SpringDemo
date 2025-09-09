@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/api/v1/tasks")
@@ -27,11 +27,11 @@ public class TaskController {
     public ResponseEntity<Map<String, Object>> triggerAsyncTask(@RequestParam String taskName) {
         logger.info("收到异步任务请求: {}", taskName);
         
-        CompletableFuture<String> future = taskService.triggerManualTask(taskName);
-        
+        String taskId = taskService.triggerManualTask(taskName);
         Map<String, Object> response = new HashMap<>();
         response.put("message", "异步任务已启动");
         response.put("taskName", taskName);
+        response.put("taskId", taskId);
         response.put("status", "running");
         
         return ResponseEntity.ok(response);
@@ -44,12 +44,74 @@ public class TaskController {
     public ResponseEntity<Map<String, Object>> triggerBatchAsyncTask(@RequestParam(defaultValue = "5") int batchSize) {
         logger.info("收到批量异步任务请求，批次大小: {}", batchSize);
         
-        CompletableFuture<Void> future = taskService.batchAsyncTask(batchSize);
+        String taskId = taskService.triggerBatchTask(batchSize);
         
         Map<String, Object> response = new HashMap<>();
         response.put("message", "批量异步任务已启动");
         response.put("batchSize", batchSize);
+        response.put("taskId", taskId);
         response.put("status", "running");
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * 根据任务ID查询任务状态
+     */
+    @GetMapping("/status/{taskId}")
+    public ResponseEntity<Map<String, Object>> getTaskStatus(@PathVariable String taskId) {
+        logger.info("查询任务状态: {}", taskId);
+        
+        TaskService.TaskInfo taskInfo = taskService.getTaskStatus(taskId);
+        Map<String, Object> response = new HashMap<>();
+        
+        if (taskInfo != null) {
+            response.put("taskId", taskInfo.getTaskId());
+            response.put("taskName", taskInfo.getTaskName());
+            response.put("status", taskInfo.getStatus());
+            response.put("startTime", taskInfo.getStartTime().toString());
+            response.put("result", taskInfo.getResult());
+            if (taskInfo.getEndTime() != null) {
+                response.put("endTime", taskInfo.getEndTime().toString());
+            }
+            response.put("message", "任务状态查询成功");
+        } else {
+            response.put("message", "任务不存在");
+            response.put("taskId", taskId);
+            return ResponseEntity.notFound().build();
+        }
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * 获取所有任务状态
+     */
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> getAllTaskStatus() {
+        logger.info("查询所有任务状态");
+        
+        ConcurrentHashMap<String, TaskService.TaskInfo> allTasks = taskService.getAllTaskStatus();
+        Map<String, Object> response = new HashMap<>();
+        
+        Map<String, Map<String, Object>> tasksData = new HashMap<>();
+        for (Map.Entry<String, TaskService.TaskInfo> entry : allTasks.entrySet()) {
+            TaskService.TaskInfo taskInfo = entry.getValue();
+            Map<String, Object> taskData = new HashMap<>();
+            taskData.put("taskId", taskInfo.getTaskId());
+            taskData.put("taskName", taskInfo.getTaskName());
+            taskData.put("status", taskInfo.getStatus());
+            taskData.put("startTime", taskInfo.getStartTime().toString());
+            taskData.put("result", taskInfo.getResult());
+            if (taskInfo.getEndTime() != null) {
+                taskData.put("endTime", taskInfo.getEndTime().toString());
+            }
+            tasksData.put(entry.getKey(), taskData);
+        }
+        
+        response.put("tasks", tasksData);
+        response.put("totalTasks", allTasks.size());
+        response.put("message", "所有任务状态查询成功");
         
         return ResponseEntity.ok(response);
     }
@@ -86,10 +148,18 @@ public class TaskController {
         
         // API接口信息
         Map<String, String> apiEndpoints = new HashMap<>();
-        apiEndpoints.put("POST /api/v1/tasks/async", "触发异步任务，参数: taskName");
-        apiEndpoints.put("POST /api/v1/tasks/async/batch", "触发批量异步任务，参数: batchSize");
+        apiEndpoints.put("POST /api/v1/tasks/async", "触发异步任务，参数: taskName，返回: taskId");
+        apiEndpoints.put("POST /api/v1/tasks/async/batch", "触发批量异步任务，参数: batchSize，返回: taskId");
+        apiEndpoints.put("GET /api/v1/tasks/status/{taskId}", "根据任务ID查询任务状态");
+        apiEndpoints.put("GET /api/v1/tasks/status", "获取所有任务状态");
         apiEndpoints.put("GET /api/v1/tasks/statistics", "获取任务统计信息");
         apiEndpoints.put("GET /api/v1/tasks/info", "获取任务说明文档");
+        
+        // 任务状态说明
+        Map<String, String> taskStatusInfo = new HashMap<>();
+        taskStatusInfo.put("RUNNING", "任务正在运行中");
+        taskStatusInfo.put("COMPLETED", "任务已完成");
+        taskStatusInfo.put("FAILED", "任务执行失败");
         
         // Cron表达式说明
         Map<String, String> cronExamples = new HashMap<>();
@@ -102,6 +172,7 @@ public class TaskController {
         
         taskInfo.put("scheduledTasks", scheduledTasks);
         taskInfo.put("apiEndpoints", apiEndpoints);
+        taskInfo.put("taskStatusInfo", taskStatusInfo);
         taskInfo.put("cronExamples", cronExamples);
         taskInfo.put("message", "Spring任务管理系统说明");
         
