@@ -49,9 +49,17 @@ public class UserDetailsServiceImpl implements UserDetailsService {
         }
         
         public static UserPrincipal create(User user) {
-            List<GrantedAuthority> authorities = user.getRoles().stream()
+            List<GrantedAuthority> authorities = new java.util.ArrayList<>();
+            
+            // 添加角色权限（以ROLE_前缀）
+            user.getRoles().stream()
                     .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
-                    .collect(Collectors.toList());
+                    .forEach(authorities::add);
+            
+            // 添加细粒度权限（不带前缀）
+            user.getPermissions().stream()
+                    .map(permission -> new SimpleGrantedAuthority(permission.getName()))
+                    .forEach(authorities::add);
             
             return new UserPrincipal(
                     user.getId(),

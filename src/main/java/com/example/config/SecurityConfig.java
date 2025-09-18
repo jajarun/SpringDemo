@@ -64,8 +64,16 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/register").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
                 .requestMatchers("/").permitAll()
+                .requestMatchers("/actuator/**").permitAll()
                 // 管理员接口
                 .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                // 用户相关接口 - 需要认证
+                .requestMatchers("/api/v1/users/**").authenticated()
+                .requestMatchers("/api/users/**").authenticated()
+                .requestMatchers("/api/redis-messages/**").authenticated()
+                .requestMatchers("/api/tasks/**").authenticated()
+                .requestMatchers("/api/cache/**").authenticated()
                 // 其他接口需要认证
                 .anyRequest().authenticated()
             );

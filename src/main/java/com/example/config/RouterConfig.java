@@ -22,12 +22,12 @@ public class RouterConfig {
         );
     }
 
-    @Bean
-    public RouterFunction<ServerResponse> authRoutes(PublicHandler publicHandler) {
-        return nest(path("/api/v1/auth"),  // 认证相关路由分组
-            route(POST("/login"), publicHandler::login)
-                .andRoute(POST("/logout"), publicHandler::logout)
-                .andRoute(GET("/profile"), publicHandler::profile)
-        );
-    }
+    // @Bean
+    // public RouterFunction<ServerResponse> authRoutes(PublicHandler publicHandler) {
+    //     return nest(path("/api/v1/auth"),  // 认证相关路由分组
+    //         route(POST("/login"), publicHandler::login)
+    //             .andRoute(POST("/logout"), publicHandler::logout)
+    //             .andRoute(GET("/profile"), publicHandler::profile)
+    //     );
+    // }
 } 

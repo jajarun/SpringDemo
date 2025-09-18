@@ -47,6 +47,8 @@ public class AuthController {
             
             UserPrincipal userDetails = (UserPrincipal) authentication.getPrincipal();
             
+            userService.getUserByEmail(loginRequest.getEmail()).get();
+
             return ResponseEntity.ok(new JwtResponse(jwt,
                     userDetails.getId(),
                     userDetails.getUsername(),

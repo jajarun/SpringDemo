@@ -30,6 +30,15 @@ public class User {
     @Column(name = "role")
     private Set<Role> roles = new HashSet<>();
     
+    // 用户权限集合
+    @ManyToMany(fetch = FetchType.EAGER)
+    @JoinTable(
+        name = "user_permissions",
+        joinColumns = @JoinColumn(name = "user_id"),
+        inverseJoinColumns = @JoinColumn(name = "permission_id")
+    )
+    private Set<Permission> permissions = new HashSet<>();
+    
     @Column(name = "enabled")
     private boolean enabled = true;
     
@@ -106,6 +115,30 @@ public class User {
     
     public void setRoles(Set<Role> roles) {
         this.roles = roles;
+    }
+    
+    public Set<Permission> getPermissions() {
+        return permissions;
+    }
+    
+    public void setPermissions(Set<Permission> permissions) {
+        this.permissions = permissions;
+    }
+    
+    // 便利方法：添加权限
+    public void addPermission(Permission permission) {
+        this.permissions.add(permission);
+    }
+    
+    // 便利方法：移除权限
+    public void removePermission(Permission permission) {
+        this.permissions.remove(permission);
+    }
+    
+    // 便利方法：检查是否有指定权限
+    public boolean hasPermission(String permissionName) {
+        return permissions.stream()
+                .anyMatch(p -> p.getName().equals(permissionName));
     }
     
     public boolean isEnabled() {

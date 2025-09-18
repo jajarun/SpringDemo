@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/api/v1/users")
 public class UserController {
     
     @Autowired
@@ -32,8 +32,8 @@ public class UserController {
     }
     
     // 获取所有用户 - 需要认证
-    @GetMapping
-    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    @GetMapping("/getAllUsers")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<User>> getAllUsers() {
         List<User> users = userService.getAllUsers();
         return ResponseEntity.ok(users);
@@ -41,7 +41,7 @@ public class UserController {
     
     // 根据ID获取用户 - 需要认证
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ROLE_USER') or hasRole('ROLE_ADMIN')")
     public ResponseEntity<User> getUserById(@PathVariable Long id) {
         Optional<User> user = userService.getUserById(id);
         return user.map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());

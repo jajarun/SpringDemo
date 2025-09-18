@@ -20,6 +20,8 @@ public class DataInitializer implements CommandLineRunner {
     
     @Override
     public void run(String... args) throws Exception {
+        System.out.println("DataInitializer run");
+
         // 检查是否已存在管理员用户
         if (!userRepository.existsByEmail("admin@example.com")) {
             User admin = new User("管理员", "admin@example.com", passwordEncoder.encode("admin123"));

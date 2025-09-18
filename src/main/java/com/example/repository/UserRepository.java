@@ -1,6 +1,8 @@
 package com.example.repository;
 
 import com.example.entity.User;
+
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -14,8 +16,14 @@ import java.util.Optional;
 @Repository
 public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User>, CustomUserRepository {
     
-    // 根据邮箱查找用户
+    // 根据邮箱查找用户 - 用于认证，不缓存
     Optional<User> findByEmail(String email);
+    
+    // 根据邮箱查找用户 - 用于其他查询，可缓存
+    // @Cacheable("findUsersByEmail")
+    default Optional<User> findByEmailCached(String email) {
+        return findByEmail(email);
+    }
     
     // 根据邮箱检查用户是否存在
     boolean existsByEmail(String email);

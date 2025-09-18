@@ -3,6 +3,10 @@ package com.example.service;
 import com.example.entity.User;
 import com.example.repository.UserRepository;
 import com.example.repository.UserSpecifications;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,9 +24,13 @@ public class UserService {
     
     @Autowired
     private UserRepository userRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
     
     // 创建用户
     public User createUser(User user) {
+        // entityManager.persist(user);
         return userRepository.save(user);
     }
     
@@ -33,12 +41,14 @@ public class UserService {
     
     // 根据ID获取用户
     public Optional<User> getUserById(Long id) {
+        // User user = entityManager.find(User.class, id);
+        // return Optional.ofNullable(user);
         return userRepository.findById(id);
     }
     
     // 根据邮箱获取用户
     public Optional<User> getUserByEmail(String email) {
-        return userRepository.findByEmail(email);
+        return userRepository.findByEmailCached(email);
     }
     
     // 搜索用户
